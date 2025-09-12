@@ -651,9 +651,9 @@ if predict_button:
         st.write(f"- Tumor Diameter: {tumor_diameter} cm")
         st.write(f"- Cirrhosis (present=1, absent=0): {cirrhosis}")
         st.write(f"- Capsule Invasion (present=1, absent=0): {capsule_invasion}")
-        st.write(f"- Tumor Differentiation (Massive=1, Others=0): {tumor_differentiation}")
+        st.write(f"- Tumor Differentiation (giant mass type=1, Others=0): {tumor_differentiation}")
         st.write(f"- Hepatitis (present=1, absent=0): {hepatitis}")
-        st.write(f"- Wide Resection (yes=1, no=0): {wide_resection}")
+        st.write(f"- Extensive Resection (yes=1, no=0): {wide_resection}")
         st.write(f"- Child-Pugh Stage (A=1, B or C=0): {child_stage}")
 
     # # 显示AFP转换结果
