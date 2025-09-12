@@ -542,7 +542,7 @@ with st.sidebar:
     tbil = st.number_input("TBIL (umol/L)", min_value=2.0, max_value=200.0, value=11.0, step=0.1)
     albi = st.number_input("ALBI", min_value=-3.0, max_value=0.0, value=-2.91, step=0.1)
     alt = st.number_input("ALT (U/L)", min_value=5.0, max_value=500.0, value=42.0, step=1.0)  # 添加ALT
-    afp = st.number_input("AFP (μg/L)", min_value=0.0, max_value=10000.0, value=600.0, step=1.0)
+    afp = st.number_input("AFP (μg/L)", min_value=0.0, max_value=100000.0, value=600.0, step=1.0)
 
     # 显示AFP转换结果
     afp_features = predictor._convert_afp_features(afp)
