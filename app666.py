@@ -1,7 +1,3 @@
-'''
-cd ~/Desktop/pythonProject1/streamlit_app
-streamlit run app.py
-'''
 from feature_order import build_and_save_feature_orders, load_feature_orders
 import streamlit as st
 import pandas as pd
@@ -14,7 +10,6 @@ import pickle
 import json
 import warnings
 import os
-# 固定随机性
 import random
 def set_random_seed(seed=42):
     np.random.seed(seed)
@@ -28,7 +23,6 @@ def set_random_seed(seed=42):
         torch.backends.cudnn.benchmark = False
 
 set_random_seed(42)
-# ---- shim for main.DeepMLP so joblib can unpickle ----
 import sys, types, torch
 from torch import nn
 
@@ -43,21 +37,18 @@ class DeepMLP(nn.Module):
         )
     def forward(self, x): return self.net(x)
 
-# ensure import path 'main.DeepMLP' is available for unpickling
 if 'main' in sys.modules:
     setattr(sys.modules['main'], 'DeepMLP', DeepMLP)
 else:
     _m = types.ModuleType('main')
     _m.DeepMLP = DeepMLP
     sys.modules['main'] = _m
-# ------------------------------------------------------
 
 def _fail(msg: str):
     st.error(msg)
     raise RuntimeError(msg)
 warnings.filterwarnings('ignore')
 
-# 尝试导入xgboost
 try:
     import xgboost as xgb
 
@@ -65,8 +56,6 @@ try:
 except ImportError:
     XGBOOST_AVAILABLE = False
     st.warning("⚠️ XGBoost is not installed.")
-
-# 尝试导入torch
 try:
     import torch
 
@@ -75,7 +64,6 @@ except ImportError:
     TORCH_AVAILABLE = False
     st.warning("⚠️ PyTorch is not installed.")
 
-# 页面配置
 st.set_page_config(
     page_title="HCC Recurrence-Free Survival Analysis Prediction System",
     page_icon="",
@@ -83,7 +71,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 自定义CSS样式
 st.markdown("""
 <style>
     .main-header {
@@ -115,11 +102,7 @@ class HCCSurvivalPredictor:
         self.models = {}
         self.feature_mapping = self._create_feature_mapping()
         self.reverse_mapping = self._create_reverse_mapping()
-
-        # 统一的生存时间点（与训练保持一致）
-        # 示例：如果训练时用“730天”，就写 730.0；如果用“24个月”，就写 24.0 并在取值处按月
         self.time_horizon = 730.0
-
         self.load_models()
     def _coerce_estimator(self, obj):
         m = obj
@@ -177,28 +160,17 @@ class HCCSurvivalPredictor:
     def _sigmoid(self, x):
         return 1.0 / (1.0 + np.exp(-float(x)))
     def _survival_at(self, surv_obj, t):
-        """
-        从各种生存函数对象中取在时间t的生存概率S(t)。
-        支持:
-          - 可调用对象(如scikit-survival的StepFunction)
-          - pandas.Series（index为时间，values为S(t)）
-          - pandas.DataFrame（第一列为S(t)）
-          - ndarray/list（无时间索引则取最后一个值）
-        """
         import numpy as np
         import pandas as pd
 
-        # 1) 可调用：直接评估
         if callable(surv_obj):
             return float(surv_obj(t))
 
-        # 2) DataFrame -> Series
         if isinstance(surv_obj, pd.DataFrame):
             if surv_obj.shape[1] == 0:
                 return float('nan')
             surv_obj = surv_obj.iloc[:, 0]
 
-        # 3) Series：按时间轴找 t 左侧的最后一个值
         if isinstance(surv_obj, pd.Series):
             times = np.asarray(surv_obj.index, dtype=float)
             vals = np.asarray(surv_obj.values, dtype=float)
@@ -208,22 +180,18 @@ class HCCSurvivalPredictor:
             idx = max(0, min(idx, len(vals) - 1))
             return float(vals[idx])
 
-        # 4) ndarray/list：没有时间轴，取末值（常见step结果）
         if isinstance(surv_obj, (list, np.ndarray)):
             arr = np.asarray(surv_obj, dtype=float)
             if arr.size == 0:
                 return float('nan')
             return float(arr[-1])
 
-        # 5) 其他标量
         try:
             return float(surv_obj)
         except Exception:
             return float('nan')
 
-    # 在 class HCCSurvivalPredictor 内新增两个工具方法（放在 _survival_at 下方即可）
     def _pos_proba(self, model, proba: np.ndarray) -> float:
-        """返回阳性类(标签=1/True)的概率，兼容 classes_ 顺序"""
         if proba.ndim == 1:
             return float(proba[0])
         idx = 1
@@ -236,7 +204,6 @@ class HCCSurvivalPredictor:
         return float(proba[0, idx])
 
     def _rsf_prob(self, model, X: pd.DataFrame, time_horizon: float) -> float:
-        """优先用RSF的生存函数在固定时间点T取 1-S(T)；否则退化为 predict_proba 或决策分数"""
         if hasattr(model, "predict_survival_function"):
             surv_funcs = model.predict_survival_function(X)
             s = self._survival_at(surv_funcs[0], time_horizon)
@@ -251,13 +218,6 @@ class HCCSurvivalPredictor:
         _fail("RSF模型没有可用的预测接口")
 
     def _cox_prob(self, model, X: pd.DataFrame, time_horizon: float) -> float:
-        """
-        Cox模型在固定时间点t的事件概率
-        :param model: 已训练的 lifelines.CoxPHFitter 模型
-        :param X: 样本特征 DataFrame
-        :param time_horizon: 固定时间点
-        :return: 每个样本在 time_horizon 的事件概率
-        """
         if hasattr(model, "predict_survival_function"):
             surv_funcs = model.predict_survival_function(X, times=[time_horizon])
             probs = 1.0 - surv_funcs.iloc[0].values
@@ -265,9 +225,6 @@ class HCCSurvivalPredictor:
         _fail("Cox模型没有可用的预测接口")
 
     def ensure_feature_orders(self, sample_df: pd.DataFrame):
-        """
-        若 models/feature_order.json 不存在或缺键，则根据已加载的模型与sample_df生成。
-        """
         json_path = "models/feature_order.json"
         need_build = True
         orders = {}
@@ -288,10 +245,6 @@ class HCCSurvivalPredictor:
         self.feature_orders = orders
 
     def _align_X(self, df: pd.DataFrame, model, model_key: str) -> pd.DataFrame:
-        """
-        按训练时列顺序对齐，若模型本身带feature_names_in_则优先用；
-        否则使用 feature_order.json 中的对应顺序。
-        """
         if hasattr(model, "feature_names_in_"):
             cols = list(model.feature_names_in_)
         else:
@@ -303,13 +256,10 @@ class HCCSurvivalPredictor:
         extra = [c for c in df.columns if c not in cols]
         if missing:
             raise RuntimeError(f"{model_key} 缺失特征: {missing}")
-        # 对多余特征不报错，直接丢弃，确保与训练一致
         X = df[cols].astype("float32")
         return X
 
     def _predict_deepsurv(self, model, Xdf: pd.DataFrame) -> float:
-        """DeepSurv稳定推理：joblib/sklearn风格或PyTorch Module"""
-        # sklearn/joblib 风格
         if hasattr(model, "predict_proba"):
             proba = model.predict_proba(Xdf)
             if proba.ndim == 2 and proba.shape[1] >= 2:
@@ -319,7 +269,6 @@ class HCCSurvivalPredictor:
             yhat = model.predict(Xdf)
             return float(yhat[0]) if hasattr(yhat, "__getitem__") else float(yhat)
 
-        # PyTorch Module
         if hasattr(model, "forward"):
             import torch
             model.eval()
@@ -331,7 +280,6 @@ class HCCSurvivalPredictor:
                     out = out[0].item() if out.ndim else float(out.item())
                 else:
                     out = float(out)
-            # 若是风险分数，统一经sigmoid映射为[0,1]；若你的模型本身输出已是概率，可去掉这行
             prob = 1.0 / (1.0 + np.exp(-out))
             return float(prob)
 
@@ -339,25 +287,19 @@ class HCCSurvivalPredictor:
 
 
     def _create_feature_mapping(self):
-        """创建中文变量名到英文的映射"""
         return {
-            # 基本信息
             '年龄__y': 'Age (Years)',
             '性别_1': 'Gender (Male=1, Female=0)',
-
-            # 实验室检查
             'ALB': 'ALB (g/L)',
             'AST': 'AST (U/L)',
             'ALT': 'ALT (U/L)',
             'TBIL': 'TBIL (umol/L)',
             'AFP': 'AFP (μg/L)',
-            'AFP_greater_400': 'AFP > 400',  # 衍生变量
+            'AFP_greater_400': 'AFP > 400', 
             'AFP_less_400': 'AFP ≤ 400',
             'PT': 'PT (s)',
             'INR': 'INR',
             'WBC': 'WBC (10^9/L)',
-
-            # 疾病相关
             '失血量': 'Blood Loss (mL)',
             '肿瘤MVI_M0': 'Tumor MVI (M0=1, M1 or M2=0)',
             '肿瘤直径': 'Tumor Diameter (cm)',
@@ -371,28 +313,22 @@ class HCCSurvivalPredictor:
         }
 
     def _create_reverse_mapping(self):
-        """创建英文到中文变量名的反向映射"""
         return {v: k for k, v in self.feature_mapping.items()}
 
     def _convert_afp_features(self, afp_value):
-        """将AFP值转换为二分类特征"""
         if afp_value > 400:
             return {'AFP_greater_400': 1, 'AFP_less_400': 0}
         else:
             return {'AFP_greater_400': 0, 'AFP_less_400': 1}
 
     def _map_chinese_to_english(self, feature_name):
-        """将中文特征名映射为英文"""
         return self.feature_mapping.get(feature_name, feature_name)
 
     def _map_english_to_chinese(self, english_name):
-        """将英文特征名映射为中文"""
         return self.reverse_mapping.get(english_name, english_name)
 
     def load_models(self):
-        """加载预训练的模型"""
         try:
-            # 加载随机生存森林模型
             try:
                 try:
                     self.models['rsf'] = joblib.load('models/newbest_rsf_model.pkl')
@@ -405,7 +341,6 @@ class HCCSurvivalPredictor:
                 st.sidebar.warning(f"⚠️ RSF Model loading failed: {str(e)}")
                 self.models['rsf'] = self.create_mock_model('RSF')
 
-        # 加载XGBoost模型 (.ubj文件)
             if XGBOOST_AVAILABLE:
                         try:
                             self.models['xgboost'] = xgb.Booster()
@@ -418,7 +353,6 @@ class HCCSurvivalPredictor:
                         st.sidebar.warning("⚠️ XGBoost not installed")
                         self.models['xgboost'] = self.create_mock_model('XGBoost')
 
-                        # 加载Cox模型 - 尝试多种加载方式
             try:
                     self.models['cox'] = joblib.load('models/cox_model.pkl')
                     #st.sidebar.success("✅ Cox模型加载成功 (joblib)")
@@ -460,7 +394,6 @@ class HCCSurvivalPredictor:
         return input_data.copy()
 
     def check_rsf_model(self):
-        """检查RSF模型的具体问题"""
         if self.models['rsf'] is not None:
             model = self.models['rsf']
             st.write("**RSF模型详细信息:**")
@@ -492,10 +425,7 @@ class HCCSurvivalPredictor:
                 st.write(f"特征重要性形状: {model.feature_importances_.shape}")
 
     def predict_survival(self, input_data):
-        """使用所有模型进行预测（严格按训练列顺序对齐；无随机兜底；稳定输出）"""
         processed_data = self.preprocess_input(input_data)
-
-        # 生成/加载训练列顺序（models/feature_order.json）
         self.ensure_feature_orders(processed_data)
 
         predictions = {}
