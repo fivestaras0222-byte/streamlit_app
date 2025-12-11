@@ -63,6 +63,7 @@ rpds-py==0.27.1
 scikit-learn==1.7.1
 scikit-survival==0.25.0
 scipy==1.15.3
+shap==0.47.0
 six==1.17.0
 smmap==5.0.2
 streamlit==1.49.1
