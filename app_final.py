@@ -614,7 +614,9 @@ if predict_button:
     import io
     from PIL import Image
 
-    plt.rcParams["font.sans-serif"] = ["Times New Roman"]
+    plt.rcParams["font.sans-serif"] = ["DejaVu Sans"]
+    plt.rcParams["font.family"] = "DejaVu Sans"
+
     plt.rcParams["axes.unicode_minus"] = False
 
     rsf_model = joblib.load('models/newbest_rsf_model.pkl')
@@ -652,7 +654,9 @@ if predict_button:
             import io
             from PIL import Image
 
-            plt.rcParams["font.sans-serif"] = ["Times New Roman"]
+            plt.rcParams["font.sans-serif"] = ["DejaVu Sans"]
+            plt.rcParams["font.family"] = "DejaVu Sans"
+
             plt.rcParams["axes.unicode_minus"] = False
 
             # ----------------------------
@@ -691,7 +695,7 @@ if predict_button:
             # ----------------------------
             TIME_POINT = predictor.time_horizon
 
-
+            @st.cache_data
             def predict_fn(df):
                 surv = rsf_model.predict_survival_function(df)
                 return np.array([1 - fn(TIME_POINT) for fn in surv])
@@ -700,6 +704,7 @@ if predict_button:
             # ----------------------------
             # STEP 3: SHAP（有背景数据 → 不再为 0）
             # ----------------------------
+            
             explainer = shap.PermutationExplainer(predict_fn, df_bg_sample)
             shap_values_single = explainer(row)
 
@@ -725,6 +730,7 @@ if predict_button:
             # ----------------------------
             # STEP 5: 绘制 waterfall（手写版）
             # ----------------------------
+            @st.cache_data
             def fig_to_pil(fig):
                 buf = io.BytesIO()
                 fig.savefig(buf, format="png", dpi=140, bbox_inches="tight", facecolor="white")
