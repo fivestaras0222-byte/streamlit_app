@@ -709,7 +709,10 @@ if predict_button:
             # STEP 3: SHAP（有背景数据 → 不再为 0）
             # ----------------------------
 
-            explainer = shap.PermutationExplainer(predict_fn, df_bg_sample)
+            @st.cache_resource
+            def get_explainer():
+                return shap.PermutationExplainer(predict_fn, df_bg_sample)
+            explainer = get_explainer()
             shap_values_single = explainer(row)
 
             shap_raw = shap_values_single.values
