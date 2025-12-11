@@ -662,8 +662,12 @@ if predict_button:
             # ----------------------------
             # STEP 0: 加载背景数据（保持中文列名！）
             # ----------------------------
-            BACKGROUND_PATH = "datahx1.csv"
-            df_bg = pd.read_csv(BACKGROUND_PATH)
+            # BACKGROUND_PATH = "datahx1.csv"
+
+            @st.cache_data
+            def load_train_data_aa():
+                return pd.read_csv("datahx1.csv")
+            df_bg = load_train_data_aa()
 
             # 模型特征（中文）
             if hasattr(rsf_model, "feature_names_in_"):
@@ -704,7 +708,7 @@ if predict_button:
             # ----------------------------
             # STEP 3: SHAP（有背景数据 → 不再为 0）
             # ----------------------------
-            
+
             explainer = shap.PermutationExplainer(predict_fn, df_bg_sample)
             shap_values_single = explainer(row)
 
