@@ -748,6 +748,9 @@ if predict_button:
 
             img_wf, buf_wf = fig_to_pil(fig)
             plt.close(fig)
+            import gc
+
+            gc.collect()
 
             st.image(img_wf, use_container_width=True)
 
