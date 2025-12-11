@@ -643,117 +643,116 @@ if predict_button:
     # ----------------------
     with col_right:
         st.markdown("### SHAP Waterfall Plot (Single Patient)")
+        with st.spinner("Generating SHAP waterfall plot... This may take 10–20 seconds."):
+            try:
+                import shap
+                import numpy as np
+                import pandas as pd
+                import matplotlib.pyplot as plt
+                import io
+                from PIL import Image
 
-        try:
-            import shap
-            import numpy as np
-            import pandas as pd
-            import matplotlib.pyplot as plt
-            import io
-            from PIL import Image
+                plt.rcParams["font.sans-serif"] = ["Times New Roman"]
+                plt.rcParams["axes.unicode_minus"] = False
 
-            plt.rcParams["font.sans-serif"] = ["DejaVu Sans"]
-            plt.rcParams["font.family"] = "DejaVu Sans"
-            plt.rcParams["axes.unicode_minus"] = False
+                # ----------------------------
+                # STEP 0: 加载背景数据（保持中文列名！）
+                # ----------------------------
+                BACKGROUND_PATH = "datahx1.csv"
+                df_bg = pd.read_csv(BACKGROUND_PATH)
 
-            # ----------------------------
-            # STEP 0: 加载背景数据（保持中文列名！）
-            # ----------------------------
-            BACKGROUND_PATH = "datahx1.csv"
-            df_bg = pd.read_csv(BACKGROUND_PATH)
+                # 模型特征（中文）
+                if hasattr(rsf_model, "feature_names_in_"):
+                    model_features = list(rsf_model.feature_names_in_)
+                else:
+                    model_features = df_bg.columns.tolist()
 
-            # 模型特征（中文）
-            if hasattr(rsf_model, "feature_names_in_"):
-                model_features = list(rsf_model.feature_names_in_)
-            else:
-                model_features = df_bg.columns.tolist()
+                # 只保留模型需要的列
+                df_bg = df_bg[model_features].applymap(lambda x: pd.to_numeric(x, errors='coerce'))
 
-            # 只保留模型需要的列
-            df_bg = df_bg[model_features].applymap(lambda x: pd.to_numeric(x, errors='coerce'))
+                # 取背景样本
+                df_bg_sample = df_bg.sample(n=min(50, len(df_bg)), random_state=42)
 
-            # 取背景样本
-            df_bg_sample = df_bg.sample(n=min(50, len(df_bg)), random_state=42)
+                # ----------------------------
+                # STEP 1: 单条输入 row（中文列名）
+                # ----------------------------
+                df_single = processed_data.copy()
 
-            # ----------------------------
-            # STEP 1: 单条输入 row（中文列名）
-            # ----------------------------
-            df_single = processed_data.copy()
+                # 补齐缺失列
+                for f in model_features:
+                    if f not in df_single.columns:
+                        df_single[f] = np.nan
 
-            # 补齐缺失列
-            for f in model_features:
-                if f not in df_single.columns:
-                    df_single[f] = np.nan
+                df_single = df_single[model_features].applymap(lambda x: pd.to_numeric(x, errors='coerce'))
+                row = df_single.iloc[[0]]
 
-            df_single = df_single[model_features].applymap(lambda x: pd.to_numeric(x, errors='coerce'))
-            row = df_single.iloc[[0]]
-
-            # ----------------------------
-            # STEP 2: 定义 RSF 预测函数
-            # ----------------------------
-            TIME_POINT = predictor.time_horizon
-
-
-            def predict_fn(df):
-                surv = rsf_model.predict_survival_function(df)
-                return np.array([1 - fn(TIME_POINT) for fn in surv])
+                # ----------------------------
+                # STEP 2: 定义 RSF 预测函数
+                # ----------------------------
+                TIME_POINT = predictor.time_horizon
 
 
-            # ----------------------------
-            # STEP 3: SHAP（有背景数据 → 不再为 0）
-            # ----------------------------
-            explainer = shap.PermutationExplainer(predict_fn, df_bg_sample)
-            shap_values_single = explainer(row)
-
-            shap_raw = shap_values_single.values
-            shap_vals = np.array(shap_raw, dtype=float).reshape(-1)
-
-            # ----------------------------
-            # STEP 4: Top 12 特征
-            # ----------------------------
-            abs_vals = np.abs(shap_vals)
-            order = np.argsort(abs_vals)[::-1]
-            idx_top = order[:12]
-
-            shap_vals_top = shap_vals[idx_top]
-            features_top = [model_features[i] for i in idx_top]
-
-            # 转英文显示（仅用于坐标轴）
-            feature_names_eng = [
-                predictor.feature_mapping.get(f, f) for f in features_top
-            ]
+                def predict_fn(df):
+                    surv = rsf_model.predict_survival_function(df)
+                    return np.array([1 - fn(TIME_POINT) for fn in surv])
 
 
-            # ----------------------------
-            # STEP 5: 绘制 waterfall（手写版）
-            # ----------------------------
-            def fig_to_pil(fig):
-                buf = io.BytesIO()
-                fig.savefig(buf, format="png", dpi=140, bbox_inches="tight", facecolor="white")
-                buf.seek(0)
-                return Image.open(buf), buf
+                # ----------------------------
+                # STEP 3: SHAP（有背景数据 → 不再为 0）
+                # ----------------------------
+                explainer = shap.PermutationExplainer(predict_fn, df_bg_sample)
+                shap_values_single = explainer(row)
+
+                shap_raw = shap_values_single.values
+                shap_vals = np.array(shap_raw, dtype=float).reshape(-1)
+
+                # ----------------------------
+                # STEP 4: Top 12 特征
+                # ----------------------------
+                abs_vals = np.abs(shap_vals)
+                order = np.argsort(abs_vals)[::-1]
+                idx_top = order[:12]
+
+                shap_vals_top = shap_vals[idx_top]
+                features_top = [model_features[i] for i in idx_top]
+
+                # 转英文显示（仅用于坐标轴）
+                feature_names_eng = [
+                    predictor.feature_mapping.get(f, f) for f in features_top
+                ]
 
 
-            colors = ["#d62728" if v > 0 else "#1f77b4" for v in shap_vals_top]
+                # ----------------------------
+                # STEP 5: 绘制 waterfall（手写版）
+                # ----------------------------
+                def fig_to_pil(fig):
+                    buf = io.BytesIO()
+                    fig.savefig(buf, format="png", dpi=140, bbox_inches="tight", facecolor="white")
+                    buf.seek(0)
+                    return Image.open(buf), buf
 
-            fig, ax = plt.subplots(figsize=(7, 0.45 * len(feature_names_eng) + 2))
 
-            y = np.arange(len(feature_names_eng))
-            ax.barh(y, shap_vals_top, color=colors)
-            ax.set_yticks(y)
-            ax.set_yticklabels(feature_names_eng)
-            ax.axvline(0, color='black', linewidth=1)
-            ax.set_xlabel("SHAP value (impact on predicted recurrence risk)")
+                colors = ["#d62728" if v > 0 else "#1f77b4" for v in shap_vals_top]
 
-            plt.title("Individual Feature Contribution")
-            fig.tight_layout()
+                fig, ax = plt.subplots(figsize=(7, 0.45 * len(feature_names_eng) + 2))
 
-            img_wf, buf_wf = fig_to_pil(fig)
-            plt.close(fig)
+                y = np.arange(len(feature_names_eng))
+                ax.barh(y, shap_vals_top, color=colors)
+                ax.set_yticks(y)
+                ax.set_yticklabels(feature_names_eng)
+                ax.axvline(0, color='black', linewidth=1)
+                ax.set_xlabel("SHAP value (impact on predicted recurrence risk)")
 
-            st.image(img_wf, use_container_width=True)
+                plt.title("Individual Feature Contribution")
+                fig.tight_layout()
 
-        except Exception as e:
-            st.error(f"Waterfall generation failed: {e}")
+                img_wf, buf_wf = fig_to_pil(fig)
+                plt.close(fig)
+
+                st.image(img_wf, use_container_width=True)
+
+            except Exception as e:
+                st.error(f"Waterfall generation failed: {e}")
 
 
     st.subheader("Result Export")
