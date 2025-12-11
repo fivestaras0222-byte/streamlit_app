@@ -730,7 +730,6 @@ if predict_button:
             # ----------------------------
             # STEP 5: 绘制 waterfall（手写版）
             # ----------------------------
-            @st.cache_data
             def fig_to_pil(fig):
                 buf = io.BytesIO()
                 fig.savefig(buf, format="png", dpi=140, bbox_inches="tight", facecolor="white")
