@@ -652,7 +652,8 @@ if predict_button:
             import io
             from PIL import Image
 
-            plt.rcParams["font.sans-serif"] = ["Times New Roman"]
+            plt.rcParams["font.sans-serif"] = ["DejaVu Sans"]
+            plt.rcParams["font.family"] = "DejaVu Sans"
             plt.rcParams["axes.unicode_minus"] = False
 
             # ----------------------------
