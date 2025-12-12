@@ -606,127 +606,124 @@ if predict_button:
             st.info(f"Predicted RFS: {int(display_value)} days")
 
     st.markdown("---")
-    if st.button("Generate SHAP Explanation"):
-        import shap
-        import matplotlib.pyplot as plt
-        import numpy as np
-        import pandas as pd
-        import io
-        from PIL import Image
+    import shap
+    import matplotlib.pyplot as plt
+    import numpy as np
+    import pandas as pd
+    import io
+    from PIL import Image
 
-        plt.rcParams["font.sans-serif"] = ["DejaVu Sans"]
-        plt.rcParams["font.family"] = "DejaVu Sans"
+    plt.rcParams["font.sans-serif"] = ["DejaVu Sans"]
+    plt.rcParams["font.family"] = "DejaVu Sans"
 
-        plt.rcParams["axes.unicode_minus"] = False
+    plt.rcParams["axes.unicode_minus"] = False
 
-        rsf_model = joblib.load('models/newbest_rsf_model.pkl')
+    rsf_model = joblib.load('models/newbest_rsf_model.pkl')
 
-        st.subheader("SHAP Explainability")
+    st.subheader("SHAP Explainability")
 
-        col_left, col_right = st.columns([1, 1])
+    col_left, col_right = st.columns([1, 1])
 
-        with col_left:
-            st.markdown("Feature Contribution (Pre-generated)")
-            st.image("shap_summary_bar.png", use_container_width=True)
-        with col_right:
-            st.markdown("### SHAP Waterfall Plot (Single Patient)")
-            # with st.spinner("Generating SHAP waterfall plot... This may take 10–20 seconds."):
-            try:
-                import shap
-                import numpy as np
-                import pandas as pd
-                import matplotlib.pyplot as plt
-                import io
-                from PIL import Image
+    with col_left:
+        st.markdown("Feature Contribution (Pre-generated)")
+        st.image("shap_summary_bar.png", use_container_width=True)
+    with col_right:
+        st.markdown("### SHAP Waterfall Plot (Single Patient)")
+        # with st.spinner("Generating SHAP waterfall plot... This may take 10–20 seconds."):
+        try:
+            import shap
+            import numpy as np
+            import pandas as pd
+            import matplotlib.pyplot as plt
+            import io
+            from PIL import Image
 
-                plt.rcParams["font.sans-serif"] = ["DejaVu Sans"]
-                plt.rcParams["font.family"] = "DejaVu Sans"
+            plt.rcParams["font.sans-serif"] = ["DejaVu Sans"]
+            plt.rcParams["font.family"] = "DejaVu Sans"
 
-                plt.rcParams["axes.unicode_minus"] = False
+            plt.rcParams["axes.unicode_minus"] = False
 
-                @st.cache_data
-                def load_train_data_aa():
-                    return pd.read_csv("datahx1.csv")
-                df_bg = load_train_data_aa()
+            @st.cache_data
+            def load_train_data_aa():
+                return pd.read_csv("datahx1.csv")
+            df_bg = load_train_data_aa()
 
-                if hasattr(rsf_model, "feature_names_in_"):
-                    model_features = list(rsf_model.feature_names_in_)
-                else:
-                    model_features = df_bg.columns.tolist()
-                df_bg = df_bg[model_features].applymap(lambda x: pd.to_numeric(x, errors='coerce'))
+            if hasattr(rsf_model, "feature_names_in_"):
+                model_features = list(rsf_model.feature_names_in_)
+            else:
+                model_features = df_bg.columns.tolist()
+            df_bg = df_bg[model_features].applymap(lambda x: pd.to_numeric(x, errors='coerce'))
 
-                df_bg_sample = df_bg.sample(n=min(20, len(df_bg)), random_state=42)
+            df_bg_sample = df_bg.sample(n=min(20, len(df_bg)), random_state=42)
 
-                df_single = processed_data.copy()
+            df_single = processed_data.copy()
 
-                for f in model_features:
-                    if f not in df_single.columns:
-                        df_single[f] = np.nan
+            for f in model_features:
+                if f not in df_single.columns:
+                    df_single[f] = np.nan
 
-                df_single = df_single[model_features].applymap(lambda x: pd.to_numeric(x, errors='coerce'))
-                row = df_single.iloc[[0]]
+            df_single = df_single[model_features].applymap(lambda x: pd.to_numeric(x, errors='coerce'))
+            row = df_single.iloc[[0]]
 
-                TIME_POINT = predictor.time_horizon
+            TIME_POINT = predictor.time_horizon
 
-                @st.cache_data
-                def predict_fn(df):
-                    surv = rsf_model.predict_survival_function(df)
-                    return np.array([1 - fn(TIME_POINT) for fn in surv])
-
-
-                @st.cache_resource
-                def get_explainer():
-                    return shap.PermutationExplainer(predict_fn, df_bg_sample)
-                explainer = get_explainer()
-                shap_values_single = explainer(row)
-
-                shap_raw = shap_values_single.values
-                shap_vals = np.array(shap_raw, dtype=float).reshape(-1)
-
-                abs_vals = np.abs(shap_vals)
-                order = np.argsort(abs_vals)[::-1]
-                idx_top = order[:8]
-
-                shap_vals_top = shap_vals[idx_top]
-                features_top = [model_features[i] for i in idx_top]
-
-                feature_names_eng = [
-                    predictor.feature_mapping.get(f, f) for f in features_top
-                ]
-
-                def fig_to_pil(fig):
-                    buf = io.BytesIO()
-                    fig.savefig(buf, format="png", dpi=140, bbox_inches="tight", facecolor="white")
-                    buf.seek(0)
-                    return Image.open(buf), buf
+            @st.cache_data
+            def predict_fn(df):
+                surv = rsf_model.predict_survival_function(df)
+                return np.array([1 - fn(TIME_POINT) for fn in surv])
 
 
-                colors = ["#d62728" if v > 0 else "#1f77b4" for v in shap_vals_top]
+            @st.cache_resource
+            def get_explainer():
+                return shap.PermutationExplainer(predict_fn, df_bg_sample)
+            explainer = get_explainer()
+            shap_values_single = explainer(row)
 
-                fig, ax = plt.subplots(figsize=(7, 0.45 * len(feature_names_eng) + 2))
+            shap_raw = shap_values_single.values
+            shap_vals = np.array(shap_raw, dtype=float).reshape(-1)
 
-                y = np.arange(len(feature_names_eng))
-                ax.barh(y, shap_vals_top, color=colors)
-                ax.set_yticks(y)
-                ax.set_yticklabels(feature_names_eng)
-                ax.axvline(0, color='black', linewidth=1)
-                ax.set_xlabel("SHAP value (impact on predicted recurrence risk)")
+            abs_vals = np.abs(shap_vals)
+            order = np.argsort(abs_vals)[::-1]
+            idx_top = order[:8]
 
-                plt.title("Individual Feature Contribution")
-                fig.tight_layout()
+            shap_vals_top = shap_vals[idx_top]
+            features_top = [model_features[i] for i in idx_top]
 
-                img_wf, buf_wf = fig_to_pil(fig)
-                plt.close(fig)
-                import gc
+            feature_names_eng = [
+                predictor.feature_mapping.get(f, f) for f in features_top
+            ]
 
-                gc.collect()
+            def fig_to_pil(fig):
+                buf = io.BytesIO()
+                fig.savefig(buf, format="png", dpi=140, bbox_inches="tight", facecolor="white")
+                buf.seek(0)
+                return Image.open(buf), buf
 
-                st.image(img_wf, use_container_width=True)
 
-            except Exception as e:
-                st.error(f"Waterfall generation failed: {e}")
-    else:
-        st.info("Click the button above to generate the SHAP explanation.")
+            colors = ["#d62728" if v > 0 else "#1f77b4" for v in shap_vals_top]
+
+            fig, ax = plt.subplots(figsize=(7, 0.45 * len(feature_names_eng) + 2))
+
+            y = np.arange(len(feature_names_eng))
+            ax.barh(y, shap_vals_top, color=colors)
+            ax.set_yticks(y)
+            ax.set_yticklabels(feature_names_eng)
+            ax.axvline(0, color='black', linewidth=1)
+            ax.set_xlabel("SHAP value (impact on predicted recurrence risk)")
+
+            plt.title("Individual Feature Contribution")
+            fig.tight_layout()
+
+            img_wf, buf_wf = fig_to_pil(fig)
+            plt.close(fig)
+            import gc
+
+            gc.collect()
+
+            st.image(img_wf, use_container_width=True)
+
+        except Exception as e:
+            st.error(f"Waterfall generation failed: {e}")
 
 
     st.subheader("Result Export")
