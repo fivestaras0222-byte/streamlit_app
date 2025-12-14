@@ -421,7 +421,14 @@ predictor = load_predictor()
 
 st.markdown("<h1 style='text-align: center;'>HCC Recurrence-Free Survival Analysis Prediction System</h1>", unsafe_allow_html=True)
 st.markdown("<h3 style='text-align: center; color: red;'>Disclaimer: Only used for research purposes</h3>", unsafe_allow_html=True)
+if st.session_state.reset_flag:
+    for k, v in DEFAULT_INPUTS.items():
+        st.session_state[k] = v
+    st.session_state.reset_flag = False
 
+for k, v in DEFAULT_INPUTS.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
 with st.sidebar:
     st.header("Info Input")
     st.subheader("Basic Info")
@@ -478,6 +485,7 @@ with st.sidebar:
     if st.sidebar.button("🔄 Reset Input", use_container_width=True):
         st.session_state.reset_flag = True
         st.rerun()
+
 if predict_button:
     st.success("✅ Generating Results...")
     input_data = pd.DataFrame({
