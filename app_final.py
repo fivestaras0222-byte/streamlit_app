@@ -39,10 +39,6 @@ DEFAULT_INPUTS = {
 if "reset_flag" not in st.session_state:
     st.session_state.reset_flag = False
 
-if st.sidebar.button("🔄 Reset Input", use_container_width=True):
-    st.session_state.reset_flag = True
-    st.rerun()
-
 
 def set_random_seed(seed=42):
     np.random.seed(seed)
@@ -490,6 +486,10 @@ with st.sidebar:
         min_value=0, max_value=1, step=1, key="child_stage")
 
     predict_button = st.button("🚀 Start Prediction", type="primary", use_container_width=True)
+
+    if st.sidebar.button("🔄 Reset Input", use_container_width=True):
+        st.session_state.reset_flag = True
+        st.rerun()
 
 if predict_button:
     st.success("✅ Generating Results...")
