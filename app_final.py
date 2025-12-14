@@ -11,8 +11,6 @@ import os
 import random
 import sys, types
 from torch import nn
-
-# ===== Reset 逻辑必须最先执行 =====
 DEFAULT_INPUTS = {
     "age": 47,
     "gender": 1,
@@ -38,8 +36,6 @@ DEFAULT_INPUTS = {
 
 if "reset_flag" not in st.session_state:
     st.session_state.reset_flag = False
-
-
 def set_random_seed(seed=42):
     np.random.seed(seed)
     random.seed(seed)
@@ -209,7 +205,7 @@ class HCCSurvivalPredictor:
         _fail("Cox模型没有可用的预测接口")
 
     def ensure_feature_orders(self, sample_df: pd.DataFrame):
-        json_path = "streamlit_app/models/feature_order.json"
+        json_path = "models/feature_order.json"
         need_build = True
         orders = {}
         if os.path.exists(json_path):
@@ -283,9 +279,9 @@ class HCCSurvivalPredictor:
             # 加载随机生存森林模型
             try:
                 try:
-                    self.models['rsf'] = joblib.load('streamlit_app/models/newbest_rsf_model.pkl')
+                    self.models['rsf'] = joblib.load('models/newbest_rsf_model.pkl')
                 except:
-                    with open('streamlit_app/models/newbest_rsf_model.pkl', 'rb') as f:
+                    with open('models/newbest_rsf_model.pkl', 'rb') as f:
                         self.models['rsf'] = pickle.load(f)
             except Exception as e:
                 st.sidebar.warning(f"⚠️ RSF Model loading failed: {str(e)}")
@@ -293,7 +289,7 @@ class HCCSurvivalPredictor:
             if XGBOOST_AVAILABLE:
                         try:
                             self.models['xgboost'] = xgb.Booster()
-                            self.models['xgboost'].load_model('streamlit_app/models/aft_model.ubj')
+                            self.models['xgboost'].load_model('models/aft_model.ubj')
                         except Exception as e:
                             st.sidebar.warning(f"⚠️ XGBoost Model loading failed: {str(e)}")
                             self.models['xgboost'] = self.create_mock_model('XGBoost')
@@ -302,21 +298,21 @@ class HCCSurvivalPredictor:
                         self.models['xgboost'] = self.create_mock_model('XGBoost')
 
             try:
-                    self.models['cox'] = joblib.load('streamlit_app/models/cox_model.pkl')
+                    self.models['cox'] = joblib.load('models/cox_model.pkl')
 
             except Exception as e:
                 st.sidebar.warning(f"⚠️ Cox Model loading failed: {str(e)}")
                 self.models['cox'] = self.create_mock_model('Cox')
 
             try:
-                    self.models['logistic'] = joblib.load('streamlit_app/models/logistic_model.pkl')
+                    self.models['logistic'] = joblib.load('models/logistic_model.pkl')
 
             except Exception as e:
                 st.sidebar.warning(f"⚠️ LR Model loading failed: {str(e)}")
                 self.models['logistic'] = self.create_mock_model('logistic')
 
             try:
-                    self.models['deepsurv'] = joblib.load('streamlit_app/models/deepsurv_model.joblib')
+                    self.models['deepsurv'] = joblib.load('models/deepsurv_model.joblib')
 
             except Exception as e:
                 st.sidebar.warning(f"⚠️ NN Model loading failed: {str(e)}")
@@ -425,14 +421,6 @@ predictor = load_predictor()
 
 st.markdown("<h1 style='text-align: center;'>HCC Recurrence-Free Survival Analysis Prediction System</h1>", unsafe_allow_html=True)
 st.markdown("<h3 style='text-align: center; color: red;'>Disclaimer: Only used for research purposes</h3>", unsafe_allow_html=True)
-if st.session_state.reset_flag:
-    for k, v in DEFAULT_INPUTS.items():
-        st.session_state[k] = v
-    st.session_state.reset_flag = False
-
-for k, v in DEFAULT_INPUTS.items():
-    if k not in st.session_state:
-        st.session_state[k] = v
 
 with st.sidebar:
     st.header("Info Input")
@@ -490,7 +478,6 @@ with st.sidebar:
     if st.sidebar.button("🔄 Reset Input", use_container_width=True):
         st.session_state.reset_flag = True
         st.rerun()
-
 if predict_button:
     st.success("✅ Generating Results...")
     input_data = pd.DataFrame({
@@ -678,7 +665,7 @@ if predict_button:
 
     with col_left:
         st.markdown("Feature Contribution (Pre-generated)")
-        st.image("plots_TEST/shap_summary_bar.png", use_container_width=True)
+        st.image("shap_summary_bar.png", use_container_width=True)
     with col_right:
         st.markdown("### SHAP Waterfall Plot (Single Patient)")
         # with st.spinner("Generating SHAP waterfall plot... This may take 10–20 seconds."):
