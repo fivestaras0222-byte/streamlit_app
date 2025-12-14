@@ -641,7 +641,7 @@ if predict_button:
     with col1:
 
         from survcurve import plot_survival_curves
-        muse = joblib.load('streamlit_app/models/deepsurv_strict.joblib')
+        muse = joblib.load('models/deepsurv_strict.joblib')
         fig = plot_survival_curves(
             processed_data,
             cox_model=mc,
