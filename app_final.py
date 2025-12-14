@@ -670,7 +670,7 @@ if predict_button:
 
     plt.rcParams["axes.unicode_minus"] = False
 
-    rsf_model = joblib.load('streamlit_app/models/newbest_rsf_model.pkl')
+    rsf_model = joblib.load('models/newbest_rsf_model.pkl')
 
     st.subheader("SHAP Explainability")
 
