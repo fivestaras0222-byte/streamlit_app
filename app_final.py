@@ -11,6 +11,39 @@ import os
 import random
 import sys, types
 from torch import nn
+
+# ===== Reset 逻辑必须最先执行 =====
+DEFAULT_INPUTS = {
+    "age": 47,
+    "gender": 1,
+    "alb": 42.3,
+    "ast": 30.0,
+    "tbil": 11.0,
+    "albi": -2.91,
+    "alt": 42.0,
+    "afp": 600.0,
+    "pt": 11.5,
+    "inr": 0.97,
+    "wbc": 8.88,
+    "blood_loss": 500,
+    "wide_resection": 1,
+    "tumor_mvi": 0,
+    "tumor_diameter": 4.0,
+    "hepatitis": 1,
+    "cirrhosis": 0,
+    "capsule_invasion": 1,
+    "tumor_differentiation": 0,
+    "child_stage": 1,
+}
+
+if "reset_flag" not in st.session_state:
+    st.session_state.reset_flag = False
+
+if st.sidebar.button("🔄 Reset Input", use_container_width=True):
+    st.session_state.reset_flag = True
+    st.rerun()
+
+
 def set_random_seed(seed=42):
     np.random.seed(seed)
     random.seed(seed)
@@ -180,7 +213,7 @@ class HCCSurvivalPredictor:
         _fail("Cox模型没有可用的预测接口")
 
     def ensure_feature_orders(self, sample_df: pd.DataFrame):
-        json_path = "models/feature_order.json"
+        json_path = "streamlit_app/models/feature_order.json"
         need_build = True
         orders = {}
         if os.path.exists(json_path):
@@ -254,9 +287,9 @@ class HCCSurvivalPredictor:
             # 加载随机生存森林模型
             try:
                 try:
-                    self.models['rsf'] = joblib.load('models/newbest_rsf_model.pkl')
+                    self.models['rsf'] = joblib.load('streamlit_app/models/newbest_rsf_model.pkl')
                 except:
-                    with open('models/newbest_rsf_model.pkl', 'rb') as f:
+                    with open('streamlit_app/models/newbest_rsf_model.pkl', 'rb') as f:
                         self.models['rsf'] = pickle.load(f)
             except Exception as e:
                 st.sidebar.warning(f"⚠️ RSF Model loading failed: {str(e)}")
@@ -264,7 +297,7 @@ class HCCSurvivalPredictor:
             if XGBOOST_AVAILABLE:
                         try:
                             self.models['xgboost'] = xgb.Booster()
-                            self.models['xgboost'].load_model('models/aft_model.ubj')
+                            self.models['xgboost'].load_model('streamlit_app/models/aft_model.ubj')
                         except Exception as e:
                             st.sidebar.warning(f"⚠️ XGBoost Model loading failed: {str(e)}")
                             self.models['xgboost'] = self.create_mock_model('XGBoost')
@@ -273,21 +306,21 @@ class HCCSurvivalPredictor:
                         self.models['xgboost'] = self.create_mock_model('XGBoost')
 
             try:
-                    self.models['cox'] = joblib.load('models/cox_model.pkl')
+                    self.models['cox'] = joblib.load('streamlit_app/models/cox_model.pkl')
 
             except Exception as e:
                 st.sidebar.warning(f"⚠️ Cox Model loading failed: {str(e)}")
                 self.models['cox'] = self.create_mock_model('Cox')
 
             try:
-                    self.models['logistic'] = joblib.load('models/logistic_model.pkl')
+                    self.models['logistic'] = joblib.load('streamlit_app/models/logistic_model.pkl')
 
             except Exception as e:
                 st.sidebar.warning(f"⚠️ LR Model loading failed: {str(e)}")
                 self.models['logistic'] = self.create_mock_model('logistic')
 
             try:
-                    self.models['deepsurv'] = joblib.load('models/deepsurv_model.joblib')
+                    self.models['deepsurv'] = joblib.load('streamlit_app/models/deepsurv_model.joblib')
 
             except Exception as e:
                 st.sidebar.warning(f"⚠️ NN Model loading failed: {str(e)}")
@@ -396,48 +429,67 @@ predictor = load_predictor()
 
 st.markdown("<h1 style='text-align: center;'>HCC Recurrence-Free Survival Analysis Prediction System</h1>", unsafe_allow_html=True)
 st.markdown("<h3 style='text-align: center; color: red;'>Disclaimer: Only used for research purposes</h3>", unsafe_allow_html=True)
+if st.session_state.reset_flag:
+    for k, v in DEFAULT_INPUTS.items():
+        st.session_state[k] = v
+    st.session_state.reset_flag = False
+
+for k, v in DEFAULT_INPUTS.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
 
 with st.sidebar:
     st.header("Info Input")
     st.subheader("Basic Info")
-    age = st.number_input("Age (Years)", min_value=18, max_value=100, value=47)
-    gender = st.number_input("Gender (Male=1, Female=0)",min_value=0, max_value=1, value=1, step=1
-                                )
+
+    age = st.number_input("Age (Years)", min_value=18, max_value=100, key="age")
+    gender = st.number_input("Gender (Male=1, Female=0)",
+                             min_value=0, max_value=1, step=1, key="gender")
 
     st.subheader("Laboratory indicators")
-    alb = st.number_input("ALB (g/L)", min_value=20.0, max_value=60.0, value=42.3, step=0.1)
-    ast = st.number_input("AST (U/L)", min_value=5.0, max_value=500.0, value=30.0, step=1.0)
-    tbil = st.number_input("TBIL (umol/L)", min_value=2.0, max_value=200.0, value=11.0, step=0.1)
-    albi = st.number_input("ALBI", min_value=-3.0, max_value=0.0, value=-2.91, step=0.1)
-    alt = st.number_input("ALT (U/L)", min_value=5.0, max_value=500.0, value=42.0, step=1.0)  # 添加ALT
-    afp = st.number_input("AFP (μg/L)", min_value=0.0, max_value=10000.0, value=600.0, step=1.0)
-    afp_features = predictor._convert_afp_features(afp)
-    pt = st.number_input("PT (s)", min_value=8.0, max_value=30.0, value=11.5, step=0.1)
-    inr = st.number_input("INR", min_value=0.8, max_value=5.0, value=0.97, step=0.1)
-    wbc = st.number_input("WBC (10^9/L)", min_value=1.0, max_value=50.0, value=8.88, step=0.1)
+    alb = st.number_input("ALB (g/L)", min_value=20.0, max_value=60.0, step=0.1, key="alb")
+    ast = st.number_input("AST (U/L)", min_value=5.0, max_value=500.0, step=1.0, key="ast")
+    tbil = st.number_input("TBIL (umol/L)", min_value=2.0, max_value=200.0, step=0.1, key="tbil")
+    albi = st.number_input("ALBI", min_value=-3.0, max_value=0.0, step=0.1, key="albi")
+    alt = st.number_input("ALT (U/L)", min_value=5.0, max_value=500.0, step=1.0, key="alt")
+    afp = st.number_input("AFP (μg/L)", min_value=0.0, max_value=10000.0, step=1.0, key="afp")
+
+    afp_features = predictor._convert_afp_features(st.session_state["afp"])
+
+    pt = st.number_input("PT (s)", min_value=8.0, max_value=30.0, step=0.1, key="pt")
+    inr = st.number_input("INR", min_value=0.8, max_value=5.0, step=0.1, key="inr")
+    wbc = st.number_input("WBC (10^9/L)", min_value=1.0, max_value=50.0, step=0.1, key="wbc")
 
     st.subheader("Surgery")
-    blood_loss = st.number_input("Blood Loss (mL)", min_value=0, max_value=5000, value=500, step=50)
-    wide_resection = st.number_input("Extensive Resection (yes=1, no=0)", min_value=0, max_value=1, value=1, step=1
-                                     )
+    blood_loss = st.number_input("Blood Loss (mL)", min_value=0, max_value=5000, step=50, key="blood_loss")
+    wide_resection = st.number_input("Extensive Resection (yes=1, no=0)",
+                                     min_value=0, max_value=1, step=1, key="wide_resection")
+
     st.subheader("Pathology")
-    tumor_mvi = st.number_input("Tumor MVI (M0=1, M1 or M2=0)", min_value=0, max_value=1, value=0, step=1)
+    tumor_mvi = st.number_input("Tumor MVI (M0=1, M1 or M2=0)",
+                                min_value=0, max_value=1, step=1, key="tumor_mvi")
 
-    tumor_diameter = st.number_input("Tumor Diameter(cm)", min_value=0.1, max_value=20.0, value=4.0, step=0.1)
-    hepatitis = st.number_input("Hepatitis (present=1, absent=0)", min_value=0, max_value=1, value=1, step=1
-                                )
-    cirrhosis = st.number_input("Cirrhosis (present=1, absent=0)", min_value=0, max_value=1, value=0, step=1,
-                                )
-    capsule_invasion = st.number_input("Capsule Invasion (present=1, absent=0)", min_value=0, max_value=1, value=1,
-                                       step=1)
-    tumor_differentiation = st.number_input("Tumor Differentiation (giant mass type=1, Others=0)", min_value=0, max_value=1,
-                                            value=0, step=1)
-    child_stage = st.number_input("Child-Pugh Stage (A=1, B or C=0)", min_value=0, max_value=1, value=1, step=1,
-                                 )
+    tumor_diameter = st.number_input("Tumor Diameter(cm)",
+                                     min_value=0.1, max_value=20.0, step=0.1, key="tumor_diameter")
+
+    hepatitis = st.number_input("Hepatitis (present=1, absent=0)",
+                                min_value=0, max_value=1, step=1, key="hepatitis")
+
+    cirrhosis = st.number_input("Cirrhosis (present=1, absent=0)",
+                                min_value=0, max_value=1, step=1, key="cirrhosis")
+
+    capsule_invasion = st.number_input("Capsule Invasion (present=1, absent=0)",
+                                       min_value=0, max_value=1, step=1, key="capsule_invasion")
+
+    tumor_differentiation = st.number_input(
+        "Tumor Differentiation (giant mass type=1, Others=0)",
+        min_value=0, max_value=1, step=1, key="tumor_differentiation")
+
+    child_stage = st.number_input(
+        "Child-Pugh Stage (A=1, B or C=0)",
+        min_value=0, max_value=1, step=1, key="child_stage")
+
     predict_button = st.button("🚀 Start Prediction", type="primary", use_container_width=True)
-
-    if st.button("🔄 Reset Input", use_container_width=True):
-        st.rerun()
 
 if predict_button:
     st.success("✅ Generating Results...")
@@ -589,7 +641,7 @@ if predict_button:
     with col1:
 
         from survcurve import plot_survival_curves
-        muse = joblib.load('models/deepsurv_strict.joblib')
+        muse = joblib.load('streamlit_app/models/deepsurv_strict.joblib')
         fig = plot_survival_curves(
             processed_data,
             cox_model=mc,
@@ -618,7 +670,7 @@ if predict_button:
 
     plt.rcParams["axes.unicode_minus"] = False
 
-    rsf_model = joblib.load('models/newbest_rsf_model.pkl')
+    rsf_model = joblib.load('streamlit_app/models/newbest_rsf_model.pkl')
 
     st.subheader("SHAP Explainability")
 
@@ -626,7 +678,7 @@ if predict_button:
 
     with col_left:
         st.markdown("Feature Contribution (Pre-generated)")
-        st.image("shap_summary_bar.png", use_container_width=True)
+        st.image("plots_TEST/shap_summary_bar.png", use_container_width=True)
     with col_right:
         st.markdown("### SHAP Waterfall Plot (Single Patient)")
         # with st.spinner("Generating SHAP waterfall plot... This may take 10–20 seconds."):
