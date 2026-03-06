@@ -260,7 +260,7 @@ class HCCSurvivalPredictor:
             '包膜是否受侵犯_未浸及': 'Capsule Invasion (present=1, absent=0)',
             '肿瘤是否巨块型分化_1': 'Tumor Differentiation (Massive=1, Others=0)',
             '是否合并肝炎_1': 'Hepatitis (present=1, absent=0)',
-            '是否大范围切除_1': 'Wide Resection (yes=1, no=0)',
+            '是否大范围切除_1': 'Extensive Resection (yes=1, no=0)',
             'child分期_A': 'Child-Pugh Stage (A=1, B or C=0)',
             'ALBI': 'ALBI Score'
         }
