@@ -16,7 +16,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          # 优先安装 requirements.txt 里的所有机器学习库
+          if (Test-Path requirements.txt) { pip install -r requirements.txt }
           pip install pyinstaller streamlit
 
       - name: Create Launcher Script
@@ -47,45 +48,46 @@ jobs:
         run: |
           $spec = @"
           # -*- mode: python ; coding: utf-8 -*-
-          block_cipher = None
+          from PyInstaller.utils.hooks import collect_all
+
+          # 自动收集 streamlit 的所有资源文件，防止页面空白
+          datas, binaries, hiddenimports = collect_all('streamlit')
+
+          # 加入你自己的业务文件
+          datas += [
+              ('app_final_combined.py', '.'),
+              ('feature_order.py', '.'),
+              ('survcurve.py', '.'),
+              ('survcurve_cn.py', '.'),
+              ('models', 'models'),
+              ('xgb_scaler.pkl', '.'),
+          ]
           
+          # 加入你提到的所有机器学习库
+          hiddenimports += [
+              'pandas', 'numpy', 'plotly', 'xgboost', 'sklearn', 
+              'shap', 'matplotlib', 'PIL', 'joblib', 'scipy', 
+              'torch', 'lifelines', 'sklearn.linear_model', 'sklearn.ensemble'
+          ]
+
           a = Analysis(
               ['run_app.py'],
               pathex=[],
-              binaries=[],
-              datas=[
-                  ('app_final_combined.py', '.'),
-                  ('feature_order.py', '.'),
-                  ('survcurve.py', '.'),
-                  ('survcurve_cn.py', '.'),
-                  ('models', 'models'),
-                  ('xgb_scaler.pkl', '.'),
-              ],
-              hiddenimports=[
-                  'streamlit',
-                  'pandas',
-                  'numpy',
-                  'plotly',
-                  'xgboost',
-                  'sklearn',
-                  'shap',
-                  'matplotlib',
-                  'PIL',
-                  'joblib',
-                  'scipy',
-                  'torch',
-                  'lifelines',
-                  'sklearn.linear_model',
-                  'sklearn.ensemble',
-              ],
+              binaries=binaries,
+              datas=datas,
+              hiddenimports=hiddenimports,
+              hookspath=[],
+              hooksconfig={},
               runtime_hooks=[],
               excludes=[],
               win_no_prefer_redirects=False,
               win_private_assemblies=False,
-              cipher=block_cipher,
+              cipher=None,
               noarchive=False,
           )
-          
+
+          pyz = PYZ(a.pure, a.zipped_data, cipher=None)
+
           exe = EXE(
               pyz,
               a.scripts,
@@ -96,12 +98,23 @@ jobs:
               bootloader_ignore_signals=False,
               strip=False,
               upx=True,
-              console=False,
+              console=False, # 设为 False 则不显示黑色命令行窗口
               disable_windowed_traceback=False,
               argv_emulation=False,
               target_arch=None,
               codesign_identity=None,
               entitlements_file=None,
+          )
+
+          coll = COLLECT(
+              exe,
+              a.binaries,
+              a.zipfiles,
+              a.datas,
+              strip=False,
+              upx=True,
+              upx_exclude=[],
+              name='HCC_Survival_Predictor',
           )
           "@
           $spec | Out-File -Encoding UTF8 run_app.spec
@@ -109,10 +122,10 @@ jobs:
       - name: Build EXE with PyInstaller
         shell: pwsh
         run: |
-          pyinstaller run_app.spec
+          pyinstaller --noconfirm run_app.spec
 
       - name: Upload Finished EXE
         uses: actions/upload-artifact@v4
         with:
-          name: HCC-Survival-Predictor-EXE
-          path: dist/HCC_Survival_Predictor.exe
+          name: HCC-Survival-Predictor-Package
+          path: dist/HCC_Survival_Predictor/
