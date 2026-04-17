@@ -1,0 +1,65 @@
+name: Pack Streamlit to Mac App
+on: [push]
+
+jobs:
+  build_mac:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # 确保安装了所有 ML 库
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install pyinstaller streamlit
+
+      - name: Create Launcher Script
+        run: |
+          cat <<EOF > run_app.py
+          import streamlit.web.cli as stcli
+          import os, sys
+          def resolve_path(path):
+              if getattr(sys, 'frozen', False):
+                  return os.path.join(sys._MEIPASS, path)
+              return path
+          if __name__ == '__main__':
+              sys.argv = ['streamlit', 'run', resolve_path('app_final_combined.py'), '--global.developmentMode=false']
+              sys.exit(stcli.main())
+          EOF
+
+      - name: Build Mac App with PyInstaller
+        run: |
+          # 这里的关键是 --windowed 和 --collect-all
+          # 注意：Mac 上的 --add-data 分隔符是冒号 :
+          pyinstaller --noconfirm --windowed --onefile \
+            --name "HCC_Survival_Predictor" \
+            --collect-all streamlit \
+            --hidden-import xgboost \
+            --hidden-import sklearn \
+            --hidden-import torch \
+            --add-data "app_final_combined.py:." \
+            --add-data "feature_order.py:." \
+            --add-data "survcurve.py:." \
+            --add-data "survcurve_cn.py:." \
+            --add-data "models:models" \
+            --add-data "xgb_scaler.pkl:." \
+            run_app.py
+
+      - name: Zip the App Bundle
+        run: |
+          # Mac 的 .app 实际上是文件夹，必须压缩后才能方便分发
+          cd dist
+          zip -r HCC_Survival_Predictor_Mac.zip HCC_Survival_Predictor.app
+
+      - name: Upload Mac App
+        uses: actions/upload-artifact@v4
+        with:
+          name: HCC-Survival-Predictor-Mac-Zip
+          path: dist/HCC_Survival_Predictor_Mac.zip
