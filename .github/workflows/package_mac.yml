@@ -11,14 +11,16 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: '3.10' # 提高版本兼容性
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          # 确保安装了所有 ML 库
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install pyinstaller streamlit
+          # 灵活安装：如果 requirements 报错，强制安装主要库
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt || pip install pandas numpy xgboost scikit-learn shap torch lifelines matplotlib plotly pillow
+          fi
 
       - name: Create Launcher Script
         run: |
@@ -36,8 +38,6 @@ jobs:
 
       - name: Build Mac App with PyInstaller
         run: |
-          # 这里的关键是 --windowed 和 --collect-all
-          # 注意：Mac 上的 --add-data 分隔符是冒号 :
           pyinstaller --noconfirm --windowed --onefile \
             --name "HCC_Survival_Predictor" \
             --collect-all streamlit \
@@ -54,7 +54,6 @@ jobs:
 
       - name: Zip the App Bundle
         run: |
-          # Mac 的 .app 实际上是文件夹，必须压缩后才能方便分发
           cd dist
           zip -r HCC_Survival_Predictor_Mac.zip HCC_Survival_Predictor.app
 
