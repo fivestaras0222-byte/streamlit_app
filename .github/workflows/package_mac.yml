@@ -1,8 +1,8 @@
-name: Pack Streamlit to Mac App
+name: Pack Streamlit to APP
 on: [push]
 
 jobs:
-  build_mac:
+  build_macos:
     runs-on: macos-latest
     steps:
       - name: Checkout code
@@ -11,57 +11,118 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10' # 提高版本兼容性
+          python-version: '3.9'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install pyinstaller streamlit
-          # 灵活安装：如果 requirements 报错，强制安装主要库
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt || pip install pandas numpy xgboost scikit-learn shap torch lifelines matplotlib plotly pillow
-          fi
 
       - name: Create Launcher Script
+        shell: bash
         run: |
-          cat <<EOF > run_app.py
+          cat > run_app.py << 'EOF'
           import streamlit.web.cli as stcli
           import os, sys
+          
           def resolve_path(path):
               if getattr(sys, 'frozen', False):
                   return os.path.join(sys._MEIPASS, path)
               return path
+
           if __name__ == '__main__':
-              sys.argv = ['streamlit', 'run', resolve_path('app_final_combined.py'), '--global.developmentMode=false']
+              sys.argv = [
+                  'streamlit',
+                  'run',
+                  resolve_path('app_final_combined.py'),
+                  '--global.developmentMode=false',
+              ]
               sys.exit(stcli.main())
           EOF
 
-      - name: Build Mac App with PyInstaller
+      - name: Create PyInstaller Spec File
+        shell: bash
         run: |
-          pyinstaller --noconfirm --windowed --onefile \
-            --name "HCC_Survival_Predictor" \
-            --collect-all streamlit \
-            --collect-all xgboost \
-            --collect-all sklearn \
-            --collect-all shap \
-            --copy-metadata streamlit \
-            --copy-metadata xgboost \
-            --hidden-import xgboost \
-            --add-data "app_final_combined.py:." \
-            --add-data "feature_order.py:." \
-            --add-data "survcurve.py:." \
-            --add-data "survcurve_cn.py:." \
-            --add-data "models:models" \
-            --add-data "xgb_scaler.pkl:." \
-            run_app.py
+          cat > run_app.spec << 'EOF'
+          # -*- mode: python ; coding: utf-8 -*-
+          from PyInstaller.utils.hooks import collect_all
 
-      - name: Zip the App Bundle
+          # 自动收集 streamlit 的所有资源文件，防止页面空白
+          datas, binaries, hiddenimports = collect_all('streamlit')
+
+          # 加入你自己的业务文件
+          datas += [
+              ('app_final_combined.py', '.'),
+              ('feature_order.py', '.'),
+              ('survcurve.py', '.'),
+              ('survcurve_cn.py', '.'),
+              ('models', 'models'),
+              ('xgb_scaler.pkl', '.'),
+          ]
+          
+          # 加入你提到的所有机器学习库
+          hiddenimports += [
+              'pandas', 'numpy', 'plotly', 'xgboost', 'sklearn', 
+              'shap', 'matplotlib', 'PIL', 'joblib', 'scipy', 
+              'torch', 'lifelines', 'sklearn.linear_model', 'sklearn.ensemble'
+          ]
+
+          a = Analysis(
+              ['run_app.py'],
+              pathex=[],
+              binaries=binaries,
+              datas=datas,
+              hiddenimports=hiddenimports,
+              hookspath=[],
+              hooksconfig={},
+              runtime_hooks=[],
+              excludes=[],
+              win_no_prefer_redirects=False,
+              win_private_assemblies=False,
+              cipher=None,
+              noarchive=False,
+          )
+
+          pyz = PYZ(a.pure, a.zipped_data, cipher=None)
+
+          exe = EXE(
+              pyz,
+              a.scripts,
+              [],
+              exclude_binaries=True,
+              name='HCC_Survival_Predictor',
+              debug=False,
+              bootloader_ignore_signals=False,
+              strip=False,
+              upx=True,
+              console=False,
+              disable_windowed_traceback=False,
+              argv_emulation=False,
+              target_arch=None,
+              codesign_identity=None,
+              entitlements_file=None,
+          )
+
+          coll = COLLECT(
+              exe,
+              a.binaries,
+              a.zipfiles,
+              a.datas,
+              strip=False,
+              upx=True,
+              upx_exclude=[],
+              name='HCC_Survival_Predictor',
+          )
+          EOF
+
+      - name: Build APP with PyInstaller
+        shell: bash
         run: |
-          cd dist
-          zip -r HCC_Survival_Predictor_Mac.zip HCC_Survival_Predictor.app
+          pyinstaller --noconfirm run_app.spec
 
-      - name: Upload Mac App
+      - name: Upload Finished APP
         uses: actions/upload-artifact@v4
         with:
-          name: HCC-Survival-Predictor-Mac-Zip
-          path: dist/HCC_Survival_Predictor_Mac.zip
+          name: HCC-Survival-Predictor-MacOS
+          path: dist/HCC_Survival_Predictor/HCC_Survival_Predictor
