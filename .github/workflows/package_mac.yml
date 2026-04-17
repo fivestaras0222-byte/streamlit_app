@@ -41,9 +41,12 @@ jobs:
           pyinstaller --noconfirm --windowed --onefile \
             --name "HCC_Survival_Predictor" \
             --collect-all streamlit \
+            --collect-all xgboost \
+            --collect-all sklearn \
+            --collect-all shap \
+            --copy-metadata streamlit \
+            --copy-metadata xgboost \
             --hidden-import xgboost \
-            --hidden-import sklearn \
-            --hidden-import torch \
             --add-data "app_final_combined.py:." \
             --add-data "feature_order.py:." \
             --add-data "survcurve.py:." \
