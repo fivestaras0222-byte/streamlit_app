@@ -1,0 +1,118 @@
+name: Pack Streamlit to EXE
+on: [push]
+
+jobs:
+  build_windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller streamlit
+
+      - name: Create Launcher Script
+        shell: pwsh
+        run: |
+          $content = @"
+          import streamlit.web.cli as stcli
+          import os, sys
+          
+          def resolve_path(path):
+              if getattr(sys, 'frozen', False):
+                  return os.path.join(sys._MEIPASS, path)
+              return path
+
+          if __name__ == '__main__':
+              sys.argv = [
+                  'streamlit',
+                  'run',
+                  resolve_path('app_final_combined.py'),
+                  '--global.developmentMode=false',
+              ]
+              sys.exit(stcli.main())
+          "@
+          $content | Out-File -Encoding UTF8 run_app.py
+
+      - name: Create PyInstaller Spec File
+        shell: pwsh
+        run: |
+          $spec = @"
+          # -*- mode: python ; coding: utf-8 -*-
+          block_cipher = None
+          
+          a = Analysis(
+              ['run_app.py'],
+              pathex=[],
+              binaries=[],
+              datas=[
+                  ('app_final_combined.py', '.'),
+                  ('feature_order.py', '.'),
+                  ('survcurve.py', '.'),
+                  ('survcurve_cn.py', '.'),
+                  ('models', 'models'),
+                  ('xgb_scaler.pkl', '.'),
+              ],
+              hiddenimports=[
+                  'streamlit',
+                  'pandas',
+                  'numpy',
+                  'plotly',
+                  'xgboost',
+                  'sklearn',
+                  'shap',
+                  'matplotlib',
+                  'PIL',
+                  'joblib',
+                  'scipy',
+                  'torch',
+                  'lifelines',
+                  'sklearn.linear_model',
+                  'sklearn.ensemble',
+              ],
+              runtime_hooks=[],
+              excludes=[],
+              win_no_prefer_redirects=False,
+              win_private_assemblies=False,
+              cipher=block_cipher,
+              noarchive=False,
+          )
+          
+          exe = EXE(
+              pyz,
+              a.scripts,
+              [],
+              exclude_binaries=True,
+              name='HCC_Survival_Predictor',
+              debug=False,
+              bootloader_ignore_signals=False,
+              strip=False,
+              upx=True,
+              console=False,
+              disable_windowed_traceback=False,
+              argv_emulation=False,
+              target_arch=None,
+              codesign_identity=None,
+              entitlements_file=None,
+          )
+          "@
+          $spec | Out-File -Encoding UTF8 run_app.spec
+
+      - name: Build EXE with PyInstaller
+        shell: pwsh
+        run: |
+          pyinstaller run_app.spec
+
+      - name: Upload Finished EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: HCC-Survival-Predictor-EXE
+          path: dist/HCC_Survival_Predictor.exe
