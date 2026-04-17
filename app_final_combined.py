@@ -11,6 +11,14 @@ import os
 import random
 import sys, types
 from torch import nn
+import tempfile
+
+def get_resource_path(relative_path):
+    if getattr(sys, 'frozen', False):
+        base_path = sys._MEIPASS
+    else:
+        base_path = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base_path, relative_path)
 
 # --- Language Configuration ---
 LANGUAGES = {
@@ -522,21 +530,36 @@ class HCCSurvivalPredictor:
         _fail(current_lang["cox_predict_fail"])
 
     def ensure_feature_orders(self, sample_df: pd.DataFrame):
-        json_path = "models/feature_order.json"
+        temp_dir = os.path.join(tempfile.gettempdir(), 'hcc_predictor')
+        json_path = os.path.join(temp_dir, 'feature_order.json')
         need_build = True
         orders = {}
-        if os.path.exists(json_path):
+        
+        bundled_json_path = get_resource_path('models/feature_order.json')
+        if os.path.exists(bundled_json_path):
             try:
-                orders = load_feature_orders(json_path)
+                orders = load_feature_orders(bundled_json_path)
                 keys_needed = [k for k in ['cox', 'rsf', 'logistic', 'deepsurv', 'xgboost'] if
                                self.models.get(k) is not None]
                 if all(k in orders for k in keys_needed):
                     need_build = False
+                    json_path = bundled_json_path
             except Exception:
                 need_build = True
-
+        
         if need_build:
-            orders = build_and_save_feature_orders(self.models, json_path, sample_df)
+            if os.path.exists(json_path):
+                try:
+                    orders = load_feature_orders(json_path)
+                    keys_needed = [k for k in ['cox', 'rsf', 'logistic', 'deepsurv', 'xgboost'] if
+                                   self.models.get(k) is not None]
+                    if all(k in orders for k in keys_needed):
+                        need_build = False
+                except Exception:
+                    need_build = True
+
+            if need_build:
+                orders = build_and_save_feature_orders(self.models, json_path, sample_df)
 
         self.feature_orders = orders
 
@@ -570,9 +593,9 @@ class HCCSurvivalPredictor:
         try:
             try:
                 try:
-                    self.models['rsf'] = joblib.load('models/newbest_rsf_model.pkl')
+                    self.models['rsf'] = joblib.load(get_resource_path('models/newbest_rsf_model.pkl'))
                 except:
-                    with open('models/newbest_rsf_model.pkl', 'rb') as f:
+                    with open(get_resource_path('models/newbest_rsf_model.pkl'), 'rb') as f:
                         self.models['rsf'] = pickle.load(f)
             except Exception as e:
                 st.sidebar.warning(current_lang["rsf_model_load_fail"].format(error=str(e)))
@@ -580,7 +603,7 @@ class HCCSurvivalPredictor:
             if XGBOOST_AVAILABLE:
                 try:
                     self.models['xgboost'] = xgb.Booster()
-                    self.models['xgboost'].load_model('models/aft_model.ubj')
+                    self.models['xgboost'].load_model(get_resource_path('models/aft_model.ubj'))
                 except Exception as e:
                     st.sidebar.warning(current_lang["xgboost_model_load_fail"].format(error=str(e)))
                     self.models['xgboost'] = self.create_mock_model('XGBoost')
@@ -589,19 +612,19 @@ class HCCSurvivalPredictor:
                 self.models['xgboost'] = self.create_mock_model('XGBoost')
 
             try:
-                self.models['cox'] = joblib.load('models/cox_model.pkl')
+                self.models['cox'] = joblib.load(get_resource_path('models/cox_model.pkl'))
             except Exception as e:
                 st.sidebar.warning(current_lang["cox_model_load_fail"].format(error=str(e)))
                 self.models['cox'] = self.create_mock_model('Cox')
 
             try:
-                self.models['logistic'] = joblib.load('models/logistic_model.pkl')
+                self.models['logistic'] = joblib.load(get_resource_path('models/logistic_model.pkl'))
             except Exception as e:
                 st.sidebar.warning(current_lang["lr_model_load_fail"].format(error=str(e)))
                 self.models['logistic'] = self.create_mock_model('logistic')
 
             try:
-                self.models['deepsurv'] = joblib.load('models/deepsurv_model.joblib')
+                self.models['deepsurv'] = joblib.load(get_resource_path('models/deepsurv_model.joblib'))
             except Exception as e:
                 st.sidebar.warning(current_lang["nn_model_load_fail"].format(error=str(e)))
                 self.models['deepsurv'] = self.create_mock_model('deepsurv')
@@ -642,7 +665,7 @@ class HCCSurvivalPredictor:
 
         if self.models.get("xgboost") is not None:
             m_xgb = self.models["xgboost"]
-            scaler = joblib.load("xgb_scaler.pkl")
+            scaler = joblib.load(get_resource_path("xgb_scaler.pkl"))
             feature_cols = ['PT',
                             'child分期_A', 'AFP_greater_400',
                             '失血量',
@@ -917,7 +940,7 @@ if predict_button:
             from survcurve_cn import plot_survival_curves
         else:
             from survcurve import plot_survival_curves
-        muse = joblib.load('models/deepsurv_strict.joblib')
+        muse = joblib.load(get_resource_path('models/deepsurv_strict.joblib'))
         fig = plot_survival_curves(
             processed_data,
             cox_model=mc,
@@ -943,7 +966,7 @@ if predict_button:
     plt.rcParams["font.family"] = "DejaVu Sans"
     plt.rcParams["axes.unicode_minus"] = False
 
-    rsf_model = joblib.load('models/newbest_rsf_model.pkl')
+    rsf_model = joblib.load(get_resource_path('models/newbest_rsf_model.pkl'))
 
     st.subheader(current_lang["shap_explainability_subheader"])
 
